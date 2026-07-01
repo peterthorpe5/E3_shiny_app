@@ -1,0 +1,4 @@
+key	value
+duckdb_path	/home/pthorpe001/data/2026_E3_protac/analysis/expression_atlas_ftp_full/e3_expression.duckdb
+max_table_rows	1000
+default_expression_unit	TPM
