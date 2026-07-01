@@ -123,3 +123,4 @@ Candidate ranking table
 
 The app uses lazy DuckDB/duckplyr queries. Do not call `collect()` until the data
 have already been filtered and row-limited.
+

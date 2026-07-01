@@ -1,6 +1,8 @@
 #!/usr/bin/env Rscript
 
-repo_dir <- normalizePath(file.path(dirname(sys.frame(1)$ofile), "../.."), mustWork = TRUE)
+source(file.path(dirname(normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[[1L]]), mustWork = TRUE)), "script_utils.R"))
+
+repo_dir <- get_repo_dir_from_script()
 setwd(repo_dir)
 
 source("R/utils.R")
