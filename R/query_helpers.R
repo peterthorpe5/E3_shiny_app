@@ -35,9 +35,10 @@ is_inactive_filter_value <- function(value) {
 
 #' Escape a SQL LIKE pattern.
 #'
-#' Escapes SQL LIKE wildcards before the app wraps a user search term in `%`.
-#' This means a user searching for `AT1G%` searches for the literal percent sign
-#' rather than expanding to all possible suffixes.
+#' Escapes SQL LIKE wildcards. This helper is retained for ad hoc use and
+#' backwards-compatible tests, but production gene searches now use DuckDB's
+#' `contains()` function rather than `LIKE ... ESCAPE`. That avoids an escaping
+#' incompatibility seen on some DuckDB builds.
 #'
 #' @param value Search value supplied by the user.
 #' @return Escaped SQL LIKE value.
@@ -47,6 +48,30 @@ escape_sql_like <- function(value) {
   escaped <- gsub("%", "\\\\%", escaped, fixed = TRUE)
   escaped <- gsub("_", "\\\\_", escaped, fixed = TRUE)
   escaped
+}
+
+#' Build a case-insensitive gene search SQL condition.
+#'
+#' DuckDB rejected the previous `LIKE ... ESCAPE '\\'` form on some
+#' installations because the escape string was interpreted as more than one
+#' character. This helper uses `contains(lower(coalesce(...)))` instead, which
+#' treats user input as a literal substring and avoids SQL wildcard escaping.
+#'
+#' @param search_value User-supplied gene ID or gene-name fragment.
+#' @return SQL condition searching both `gene_id` and `gene_name`.
+build_gene_contains_condition <- function(search_value) {
+  clean_value <- tolower(trimws(as.character(search_value[[1L]])))
+  safe_value <- escape_sql_literal(clean_value)
+
+  paste0(
+    "(",
+    "contains(lower(coalesce(CAST(gene_id AS VARCHAR), '')), '",
+    safe_value,
+    "') OR contains(lower(coalesce(CAST(gene_name AS VARCHAR), '')), '",
+    safe_value,
+    "')",
+    ")"
+  )
 }
 
 #' Build SQL conditions from app filters.
@@ -100,15 +125,9 @@ build_expression_filter_conditions <- function(filters = list()) {
   gene_search <- filters$gene_search
 
   if (!is_inactive_filter_value(gene_search)) {
-    search_pattern <- paste0("%", escape_sql_like(trimws(gene_search[[1L]])), "%")
     conditions <- c(
       conditions,
-      paste0(
-        "(",
-        "gene_id LIKE '", search_pattern, "' ESCAPE '\\\\' ",
-        "OR gene_name LIKE '", search_pattern, "' ESCAPE '\\\\'",
-        ")"
-      )
+      build_gene_contains_condition(search_value = gene_search[[1L]])
     )
   }
 
@@ -225,8 +244,8 @@ build_gene_lookup_query <- function(
   alias = "expr_app"
 ) {
   safe_alias <- sanitise_duckdb_alias(alias = alias)
-  search_pattern <- paste0("%", escape_sql_like(trimws(gene_query)), "%")
   unit_value <- escape_sql_literal(expression_unit)
+  gene_condition <- build_gene_contains_condition(search_value = gene_query)
 
   paste(
     "SELECT",
@@ -235,8 +254,7 @@ build_gene_lookup_query <- function(
     "expression_value, expression_unit",
     "FROM", paste0(safe_alias, ".main.atlas_expression_with_sample_metadata"),
     "WHERE expression_unit = '", unit_value, "'",
-    "AND (gene_id LIKE '", search_pattern, "' ESCAPE '\\\\' ",
-    "OR gene_name LIKE '", search_pattern, "' ESCAPE '\\\\')",
+    "AND", gene_condition,
     "LIMIT", as.integer(max_rows)
   )
 }

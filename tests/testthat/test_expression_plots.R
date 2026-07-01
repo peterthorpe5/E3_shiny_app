@@ -70,7 +70,8 @@ testthat::test_that("plot query requires a gene search and includes a limit", {
   )
 
   testthat::expect_match(query, "atlas_expression_with_sample_metadata")
-  testthat::expect_match(query, "gene_id LIKE")
+  testthat::expect_match(query, "contains\\(lower")
+  testthat::expect_false(grepl("ESCAPE", query, fixed = TRUE))
   testthat::expect_match(query, "LIMIT 123")
 })
 

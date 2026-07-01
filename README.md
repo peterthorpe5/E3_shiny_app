@@ -132,4 +132,4 @@ visualisation.
 
 ## Current version
 
-`0.2.0` adds the first expression visualisation module and expanded tests.
+`0.2.1` fixes DuckDB gene-search escaping in the expression table, gene lookup, and visualisation queries. Gene searches now use literal case-insensitive `contains()` SQL rather than `LIKE ... ESCAPE`, which failed on some DuckDB builds. Tests have been expanded to cover this route.
