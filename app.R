@@ -65,41 +65,30 @@ ui <- bslib::page_sidebar(
 )
 
 server <- function(input, output, session) {
-  # A reactive table wrapper keeps all modules working from the same lazy source.
-  # The returned object is not collected here.
-  expression_table <- shiny::reactive({
-    get_expression_with_metadata(duckdb_path = app_config$duckdb_path)
-  })
-
+  # Filters are collected as ordinary scalar values.  Summary, table, and gene
+  # lookup modules turn those values into SQL and let DuckDB do the heavy work.
   filters <- expression_filters_server(
     id = "filters",
     duckdb_path = app_config$duckdb_path,
     default_expression_unit = app_config$default_expression_unit
   )
 
-  # The filtered table remains lazy. Downstream modules decide how many rows are
-  # safe to collect for display.
-  filtered_table <- shiny::reactive({
-    apply_expression_filters(
-      expr_table = expression_table(),
-      filters = filters()
-    )
-  })
-
   expression_summary_server(
     id = "summary",
-    filtered_table = filtered_table
+    duckdb_path = app_config$duckdb_path,
+    filters = filters
   )
 
   expression_table_server(
     id = "table",
-    filtered_table = filtered_table,
+    duckdb_path = app_config$duckdb_path,
+    filters = filters,
     max_rows = app_config$max_table_rows
   )
 
   gene_lookup_server(
     id = "gene_lookup",
-    expr_table = expression_table,
+    duckdb_path = app_config$duckdb_path,
     max_rows = app_config$max_table_rows
   )
 }

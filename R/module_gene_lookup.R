@@ -17,39 +17,36 @@ gene_lookup_ui <- function(id) {
 
 #' Gene lookup server.
 #'
-#' Performs a simple cross-species gene lookup against the expression table.
+#' Performs a bounded cross-species gene lookup using direct DuckDB SQL. The
+#' result is only collected after a user presses the lookup button.
 #'
 #' @param id Module identifier.
-#' @param expr_table Reactive returning lazy expression table.
+#' @param duckdb_path Path to the DuckDB database.
 #' @param max_rows Maximum rows collected for display.
 #' @return No return value.
-gene_lookup_server <- function(id, expr_table, max_rows = 1000L) {
+gene_lookup_server <- function(id, duckdb_path, max_rows = 1000L) {
   shiny::moduleServer(id, function(input, output, session) {
     lookup_table <- shiny::eventReactive(input$lookup, {
       shiny::req(input$gene_query)
 
-      query_value <- paste0("%", trimws(input$gene_query), "%")
-
-      expr_table() |>
-        dplyr::filter(.data$expression_unit == input$unit) |>
-        dplyr::filter(
-          stringr::str_like(.data$gene_id, query_value) |
-            stringr::str_like(.data$gene_name, query_value)
-        ) |>
-        dplyr::select(
-          .data$species_column,
-          .data$experiment_accession,
-          .data$gene_id,
-          .data$gene_name,
-          .data$sample_or_condition,
-          .data$organism_part,
-          .data$developmental_stage,
-          .data$condition,
-          .data$expression_value,
-          .data$expression_unit
-        ) |>
-        head(max_rows) |>
-        dplyr::collect()
+      tryCatch(
+        expr = collect_duckdb_query(
+          duckdb_path = duckdb_path,
+          query = build_gene_lookup_query(
+            gene_query = input$gene_query,
+            expression_unit = input$unit,
+            max_rows = max_rows
+          )
+        ),
+        error = function(error) {
+          shiny::showNotification(
+            paste("Failed to run gene lookup:", conditionMessage(error)),
+            type = "error",
+            duration = NULL
+          )
+          tibble::tibble(error = conditionMessage(error))
+        }
+      )
     }, ignoreNULL = FALSE)
 
     output$gene_table <- DT::renderDT({

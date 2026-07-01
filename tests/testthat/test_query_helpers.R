@@ -85,3 +85,83 @@ testthat::test_that("metadata coverage summary counts non-missing metadata", {
   testthat::expect_equal(coverage$rows_with_developmental_stage, 3)
   testthat::expect_equal(coverage$rows_with_condition, 3)
 })
+
+testthat::test_that("inactive filter detection handles placeholders and empty values", {
+  testthat::expect_true(is_inactive_filter_value(NULL))
+  testthat::expect_true(is_inactive_filter_value(character()))
+  testthat::expect_true(is_inactive_filter_value(NA_character_))
+  testthat::expect_true(is_inactive_filter_value(""))
+  testthat::expect_true(is_inactive_filter_value("All"))
+  testthat::expect_true(is_inactive_filter_value("Loading..."))
+  testthat::expect_false(is_inactive_filter_value("Zea_mays"))
+})
+
+testthat::test_that("expression SQL WHERE clauses include active filters only", {
+  where_clause <- build_expression_where_clause(list(
+    species_column = "Zea_mays",
+    expression_unit = "TPM",
+    experiment_accession = "All",
+    organism_part = "leaf",
+    developmental_stage = "",
+    condition = NA_character_,
+    minimum_expression = 2,
+    gene_search = "Zm00001"
+  ))
+
+  testthat::expect_match(where_clause, '"species_column" = \'Zea_mays\'')
+  testthat::expect_match(where_clause, '"expression_unit" = \'TPM\'')
+  testthat::expect_match(where_clause, '"organism_part" = \'leaf\'')
+  testthat::expect_match(where_clause, "expression_value >= 2")
+  testthat::expect_match(where_clause, "gene_id LIKE")
+  testthat::expect_false(grepl("experiment_accession", where_clause))
+})
+
+testthat::test_that("summary, coverage and display SQL target the metadata-aware view", {
+  filters <- list(species_column = "Zea_mays", expression_unit = "TPM")
+
+  summary_query <- build_expression_summary_query(filters = filters)
+  coverage_query <- build_metadata_coverage_query(filters = filters)
+  display_query <- build_expression_display_query(filters = filters, max_rows = 25L)
+
+  testthat::expect_match(summary_query, "atlas_expression_with_sample_metadata")
+  testthat::expect_match(summary_query, "COUNT\\(DISTINCT gene_id\\)")
+  testthat::expect_match(coverage_query, "rows_with_organism_part")
+  testthat::expect_match(display_query, "LIMIT 25")
+})
+
+testthat::test_that("direct DuckDB summary helpers return expected values", {
+  duckdb_path <- make_test_duckdb()
+
+  summary <- collect_expression_summary(
+    duckdb_path = duckdb_path,
+    filters = list(species_column = "Zea_mays", expression_unit = "TPM")
+  )
+
+  coverage <- collect_metadata_coverage(
+    duckdb_path = duckdb_path,
+    filters = list(species_column = "Zea_mays", expression_unit = "TPM")
+  )
+
+  display <- collect_expression_display_sql(
+    duckdb_path = duckdb_path,
+    filters = list(species_column = "Zea_mays", expression_unit = "TPM"),
+    max_rows = 10L
+  )
+
+  testthat::expect_equal(summary$rows, 2)
+  testthat::expect_equal(summary$genes, 2)
+  testthat::expect_equal(coverage$rows_with_organism_part, 1)
+  testthat::expect_equal(nrow(display), 2L)
+})
+
+testthat::test_that("gene lookup SQL is bounded and escapes wildcard characters", {
+  query <- build_gene_lookup_query(
+    gene_query = "AT1G_%",
+    expression_unit = "TPM",
+    max_rows = 50L
+  )
+
+  testthat::expect_match(query, "LIMIT 50")
+  testthat::expect_match(query, "ESCAPE")
+  testthat::expect_match(query, "expression_unit = '")
+})

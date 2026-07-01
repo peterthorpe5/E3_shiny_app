@@ -77,7 +77,7 @@ view during app start-up.
 
 ## Version notes
 
-### v0.1.4
+### v0.1.5
 
 - Optimised filter loading so the app does not derive species choices from the
   huge joined expression-metadata table.
@@ -96,3 +96,11 @@ view during app start-up.
 ### v0.1.1
 
 - Fixed Rscript path detection.
+
+
+## v0.1.5 notes
+
+This version moves the summary, display-table and gene-lookup modules to direct
+DuckDB SQL queries. This avoids Shiny value boxes showing opaque `[object Object]`
+errors when a lazy joined view cannot be summarised through dplyr/duckplyr. It
+also adds broader tests around SQL generation and module server behaviour.

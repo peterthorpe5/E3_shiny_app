@@ -76,29 +76,43 @@ testthat::test_that("safely_collect_choices returns values and converts errors t
   )
 })
 
-testthat::test_that("expression summary server renders numeric summaries", {
+testthat::test_that("format_summary_count handles good and missing values", {
+  testthat::expect_equal(format_summary_count(1000), "1,000")
+  testthat::expect_equal(format_summary_count(NA_real_), "0")
+  testthat::expect_equal(format_summary_count(NULL), "0")
+})
+
+testthat::test_that("expression summary server renders numeric summaries from DuckDB", {
   testthat::skip_if_not_installed("shiny")
+
+  duckdb_path <- make_test_duckdb()
 
   shiny::testServer(
     app = expression_summary_server,
-    args = list(filtered_table = shiny::reactive(make_test_expression_tbl())),
+    args = list(
+      duckdb_path = duckdb_path,
+      filters = shiny::reactive(list(species_column = "Zea_mays", expression_unit = "TPM"))
+    ),
     {
-      testthat::expect_equal(output$row_count, "4")
-      testthat::expect_equal(output$gene_count, "3")
-      testthat::expect_equal(output$experiment_count, "3")
+      testthat::expect_equal(output$row_count, "2")
+      testthat::expect_equal(output$gene_count, "2")
+      testthat::expect_equal(output$experiment_count, "2")
       testthat::expect_equal(output$group_count, "2")
     }
   )
 })
 
-testthat::test_that("expression table server renders a DT object", {
+testthat::test_that("expression table server renders a DT object from DuckDB", {
   testthat::skip_if_not_installed("shiny")
   testthat::skip_if_not_installed("DT")
+
+  duckdb_path <- make_test_duckdb()
 
   shiny::testServer(
     app = expression_table_server,
     args = list(
-      filtered_table = shiny::reactive(make_test_expression_tbl()),
+      duckdb_path = duckdb_path,
+      filters = shiny::reactive(list(species_column = "Zea_mays", expression_unit = "TPM")),
       max_rows = 2L
     ),
     {
@@ -107,14 +121,16 @@ testthat::test_that("expression table server renders a DT object", {
   )
 })
 
-testthat::test_that("gene lookup server returns matching gene rows", {
+testthat::test_that("gene lookup server renders matching gene rows from DuckDB", {
   testthat::skip_if_not_installed("shiny")
   testthat::skip_if_not_installed("DT")
+
+  duckdb_path <- make_test_duckdb()
 
   shiny::testServer(
     app = gene_lookup_server,
     args = list(
-      expr_table = shiny::reactive(make_test_expression_tbl()),
+      duckdb_path = duckdb_path,
       max_rows = 10L
     ),
     {

@@ -10,8 +10,8 @@ expression_filters_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::tagList(
-    shiny::selectInput(ns("species_column"), "Species", choices = "Loading..."),
-    shiny::selectInput(ns("expression_unit"), "Expression unit", choices = "Loading..."),
+    shiny::selectInput(ns("species_column"), "Species", choices = "All"),
+    shiny::selectInput(ns("expression_unit"), "Expression unit", choices = "TPM"),
     shiny::selectInput(ns("experiment_accession"), "Experiment", choices = "All"),
     shiny::selectInput(ns("organism_part"), "Organism part", choices = "All"),
     shiny::selectInput(ns("developmental_stage"), "Developmental stage", choices = "All"),
@@ -118,12 +118,18 @@ expression_filters_server <- function(
 
       shiny::req(!is.null(initial_choices))
 
+      default_species <- if (length(initial_choices$species) > 0L) {
+        initial_choices$species[[1L]]
+      } else {
+        "All"
+      }
+
       update_filter_select(
         session = session,
         input_id = "species_column",
         choices = initial_choices$species,
         include_all = TRUE,
-        selected = "All"
+        selected = default_species
       )
 
       update_filter_select(
@@ -200,7 +206,7 @@ expression_filters_server <- function(
         developmental_stage = input$developmental_stage,
         condition = input$condition,
         gene_search = input$gene_search,
-        minimum_expression = input$minimum_expression
+        minimum_expression = input$minimum_expression %||% 0
       )
     }, ignoreNULL = FALSE)
 
