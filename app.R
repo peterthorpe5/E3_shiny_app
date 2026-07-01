@@ -73,7 +73,7 @@ server <- function(input, output, session) {
 
   filters <- expression_filters_server(
     id = "filters",
-    expr_table = expression_table,
+    duckdb_path = app_config$duckdb_path,
     default_expression_unit = app_config$default_expression_unit
   )
 

@@ -1,6 +1,8 @@
 #' Expression filter UI.
 #'
-#' Creates sidebar controls for filtering the expression table.
+#' Creates sidebar controls for filtering the expression table. The initial
+#' choices are deliberately lightweight placeholders; the server module replaces
+#' them with real values from DuckDB after the app starts.
 #'
 #' @param id Module identifier.
 #' @return Shiny UI elements.
@@ -9,7 +11,7 @@ expression_filters_ui <- function(id) {
 
   shiny::tagList(
     shiny::selectInput(ns("species_column"), "Species", choices = "Loading..."),
-    shiny::selectInput(ns("expression_unit"), "Expression unit", choices = c("TPM", "FPKM", "All")),
+    shiny::selectInput(ns("expression_unit"), "Expression unit", choices = "Loading..."),
     shiny::selectInput(ns("experiment_accession"), "Experiment", choices = "All"),
     shiny::selectInput(ns("organism_part"), "Organism part", choices = "All"),
     shiny::selectInput(ns("developmental_stage"), "Developmental stage", choices = "All"),
@@ -20,87 +22,175 @@ expression_filters_ui <- function(id) {
   )
 }
 
+#' Update a select input while preserving safe defaults.
+#'
+#' Adds an optional `All` choice and replaces empty choice vectors with a clear
+#' fallback. This keeps the UI usable when a species has sparse metadata.
+#'
+#' @param session Shiny session object.
+#' @param input_id Input identifier within the module namespace.
+#' @param choices Character vector of choices.
+#' @param include_all Whether to prepend `All`.
+#' @param selected Selected value.
+#' @return Invisibly returns the final choices.
+update_filter_select <- function(
+  session,
+  input_id,
+  choices,
+  include_all = TRUE,
+  selected = NULL
+) {
+  unique_choices <- sort(unique(as.character(choices)))
+  unique_choices <- unique_choices[!is.na(unique_choices) & unique_choices != ""]
+
+  final_choices <- if (include_all) {
+    c("All", unique_choices)
+  } else {
+    unique_choices
+  }
+
+  if (length(final_choices) == 0L) {
+    final_choices <- "All"
+  }
+
+  if (is.null(selected) || !selected %in% final_choices) {
+    selected <- final_choices[[1L]]
+  }
+
+  shiny::updateSelectInput(
+    session = session,
+    inputId = input_id,
+    choices = final_choices,
+    selected = selected
+  )
+
+  invisible(final_choices)
+}
+
+#' Safely collect filter choices.
+#'
+#' Wraps choice collection so the app shows a useful notification rather than a
+#' permanently grey loading screen when DuckDB paths are broken or a query fails.
+#'
+#' @param expr Expression that returns filter choices.
+#' @param session Shiny session object.
+#' @param message Failure message to show to the user.
+#' @return The expression result, or NULL on failure.
+safely_collect_choices <- function(expr, session, message) {
+  tryCatch(
+    expr = force(expr),
+    error = function(error) {
+      shiny::showNotification(
+        paste(message, conditionMessage(error)),
+        type = "error",
+        duration = NULL
+      )
+      NULL
+    }
+  )
+}
+
 #' Expression filter server.
 #'
-#' Populates filter controls from the lazy expression table and returns a
-#' reactive list of filter values when the user applies filters.
+#' Populates filter controls from DuckDB using small filter-choice queries, not
+#' from the huge expression-plus-metadata joined view. This keeps app start-up
+#' responsive on large datasets.
 #'
 #' @param id Module identifier.
-#' @param expr_table Reactive returning lazy expression table.
+#' @param duckdb_path Path to the DuckDB database.
 #' @param default_expression_unit Default expression unit.
 #' @return Reactive list of filter values.
 expression_filters_server <- function(
   id,
-  expr_table,
+  duckdb_path,
   default_expression_unit = "TPM"
 ) {
   shiny::moduleServer(id, function(input, output, session) {
-    shiny::observeEvent(expr_table(), {
-      table <- expr_table()
+    # Initial species/unit choices are read once from atlas_expression_long.  Do
+    # not use the joined expression-metadata view here: that view can represent
+    # hundreds of millions of rows.
+    shiny::observeEvent(TRUE, {
+      initial_choices <- safely_collect_choices(
+        expr = collect_initial_filter_choices(duckdb_path = duckdb_path),
+        session = session,
+        message = "Failed to load initial filter choices:"
+      )
 
-      species <- collect_distinct_values(table, "species_column")
-      units <- collect_distinct_values(table, "expression_unit")
+      shiny::req(!is.null(initial_choices))
 
-      shiny::updateSelectInput(
-        session,
-        "species_column",
-        choices = c("All", species),
+      update_filter_select(
+        session = session,
+        input_id = "species_column",
+        choices = initial_choices$species,
+        include_all = TRUE,
         selected = "All"
       )
 
-      shiny::updateSelectInput(
-        session,
-        "expression_unit",
-        choices = c(units, "All"),
+      update_filter_select(
+        session = session,
+        input_id = "expression_unit",
+        choices = initial_choices$expression_units,
+        include_all = TRUE,
         selected = default_expression_unit
       )
     }, once = TRUE)
 
-    shiny::observeEvent(input$species_column, {
-      req_table <- expr_table()
-      table <- req_table
+    # Context-dependent filters are refreshed when species or unit changes.
+    shiny::observeEvent(
+      eventExpr = list(input$species_column, input$expression_unit),
+      handlerExpr = {
+        shiny::req(input$species_column)
+        shiny::req(input$expression_unit)
 
-      if (!is.null(input$species_column) && input$species_column != "All") {
-        table <- table |>
-          dplyr::filter(.data$species_column == input$species_column)
-      }
+        context_choices <- safely_collect_choices(
+          expr = collect_context_filter_choices(
+            duckdb_path = duckdb_path,
+            species_column = input$species_column,
+            expression_unit = input$expression_unit
+          ),
+          session = session,
+          message = "Failed to load context filter choices:"
+        )
 
-      experiments <- collect_distinct_values(table, "experiment_accession")
-      organism_parts <- collect_distinct_values(table, "organism_part")
-      stages <- collect_distinct_values(table, "developmental_stage")
-      conditions <- collect_distinct_values(table, "condition")
+        shiny::req(!is.null(context_choices))
 
-      shiny::updateSelectInput(
-        session,
-        "experiment_accession",
-        choices = c("All", experiments),
-        selected = "All"
-      )
+        update_filter_select(
+          session = session,
+          input_id = "experiment_accession",
+          choices = context_choices$experiments,
+          include_all = TRUE,
+          selected = "All"
+        )
 
-      shiny::updateSelectInput(
-        session,
-        "organism_part",
-        choices = c("All", organism_parts),
-        selected = "All"
-      )
+        update_filter_select(
+          session = session,
+          input_id = "organism_part",
+          choices = context_choices$organism_parts,
+          include_all = TRUE,
+          selected = "All"
+        )
 
-      shiny::updateSelectInput(
-        session,
-        "developmental_stage",
-        choices = c("All", stages),
-        selected = "All"
-      )
+        update_filter_select(
+          session = session,
+          input_id = "developmental_stage",
+          choices = context_choices$developmental_stages,
+          include_all = TRUE,
+          selected = "All"
+        )
 
-      shiny::updateSelectInput(
-        session,
-        "condition",
-        choices = c("All", conditions),
-        selected = "All"
-      )
-    }, ignoreInit = TRUE)
+        update_filter_select(
+          session = session,
+          input_id = "condition",
+          choices = context_choices$conditions,
+          include_all = TRUE,
+          selected = "All"
+        )
+      },
+      ignoreInit = TRUE
+    )
 
-    # Store the eventReactive in a named object so it can be returned to
-    # the main app and tested with shiny::testServer().
+    # Store the eventReactive in a named object so it can be returned to the
+    # main app and tested with shiny::testServer().
     filters <- shiny::eventReactive(input$apply_filters, {
       list(
         species_column = input$species_column,

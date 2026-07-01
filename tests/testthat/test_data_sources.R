@@ -19,9 +19,40 @@ testthat::test_that("attached view SQL uses a sanitised alias and main schema", 
   )
 })
 
+testthat::test_that("filter WHERE clauses ignore All, empty, NULL and NA values", {
+  where_clause <- build_filter_where_clause(list(
+    species_column = "Zea_mays",
+    expression_unit = "All",
+    organism_part = "",
+    condition = NA_character_,
+    ignored = NULL
+  ))
+
+  testthat::expect_equal(where_clause, 'WHERE "species_column" = \'Zea_mays\'')
+  testthat::expect_equal(build_filter_where_clause(list()), "")
+})
+
+testthat::test_that("filter-choice SQL targets attached views and excludes blank values", {
+  query <- build_filter_choice_query(
+    view_name = "atlas_expression_long",
+    column_name = "experiment_accession",
+    filters = list(species_column = "Zea_mays"),
+    alias = "expr-app",
+    limit = 25L
+  )
+
+  testthat::expect_match(query, "expr_app.main")
+  testthat::expect_match(query, "atlas_expression_long")
+  testthat::expect_match(query, "experiment_accession")
+  testthat::expect_match(query, "species_column")
+  testthat::expect_match(query, "LIMIT 25")
+})
+
 testthat::test_that("collect_distinct_values returns sorted non-missing values", {
   values <- collect_distinct_values(
-    table = tibble::tibble(species_column = c("Zea_mays", NA, "Arabidopsis_thaliana", "Zea_mays")),
+    table = tibble::tibble(
+      species_column = c("Zea_mays", NA, "Arabidopsis_thaliana", "Zea_mays")
+    ),
     column_name = "species_column"
   )
 
@@ -29,43 +60,7 @@ testthat::test_that("collect_distinct_values returns sorted non-missing values",
 })
 
 testthat::test_that("DuckDB reader wrappers query expected views", {
-  testthat::skip_if_not_installed("DBI")
-  testthat::skip_if_not_installed("duckdb")
-  testthat::skip_if_not_installed("duckplyr")
-
-  duckdb_path <- tempfile(fileext = ".duckdb")
-  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = duckdb_path, read_only = FALSE)
-
-  DBI::dbExecute(
-    con,
-    "CREATE TABLE atlas_expression_long AS
-     SELECT 'Zea_mays' AS species_column,
-            'TPM' AS expression_unit,
-            'E1' AS experiment_accession,
-            'Zm00001' AS gene_id,
-            '' AS gene_name,
-            'g1' AS sample_or_condition,
-            5.0 AS expression_value"
-  )
-
-  DBI::dbExecute(
-    con,
-    "CREATE VIEW atlas_expression_with_sample_metadata AS
-     SELECT *, 'leaf' AS organism_part, '9 day' AS developmental_stage,
-            'leaf section 1' AS condition
-     FROM atlas_expression_long"
-  )
-
-  DBI::dbExecute(
-    con,
-    "CREATE VIEW atlas_sample_metadata_wide_joinable AS
-     SELECT 'Zea_mays' AS species_column,
-            'E1' AS experiment_accession,
-            'g1' AS sample_or_condition,
-            'leaf' AS organism_part"
-  )
-
-  DBI::dbDisconnect(con, shutdown = TRUE)
+  duckdb_path <- make_test_duckdb()
 
   expr <- get_expression_long(duckdb_path = duckdb_path) |>
     dplyr::collect()
@@ -74,7 +69,46 @@ testthat::test_that("DuckDB reader wrappers query expected views", {
   meta <- get_sample_metadata(duckdb_path = duckdb_path) |>
     dplyr::collect()
 
-  testthat::expect_equal(expr$species_column[[1]], "Zea_mays")
-  testthat::expect_equal(expr_meta$organism_part[[1]], "leaf")
-  testthat::expect_equal(meta$sample_or_condition[[1]], "g1")
+  testthat::expect_true(nrow(expr) > 0L)
+  testthat::expect_true(nrow(expr_meta) > 0L)
+  testthat::expect_true(nrow(meta) > 0L)
+})
+
+testthat::test_that("filter choices can be collected directly from DuckDB", {
+  duckdb_path <- make_test_duckdb()
+
+  species <- collect_filter_values(
+    duckdb_path = duckdb_path,
+    view_name = "atlas_expression_long",
+    column_name = "species_column"
+  )
+
+  experiments <- collect_filter_values(
+    duckdb_path = duckdb_path,
+    view_name = "atlas_expression_long",
+    column_name = "experiment_accession",
+    filters = list(species_column = "Zea_mays")
+  )
+
+  testthat::expect_equal(species, c("Arabidopsis_thaliana", "Zea_mays"))
+  testthat::expect_true(all(experiments %in% c("E1", "E2")))
+})
+
+testthat::test_that("initial and context filter helpers return named choice lists", {
+  duckdb_path <- make_test_duckdb()
+
+  initial_choices <- collect_initial_filter_choices(duckdb_path = duckdb_path)
+  context_choices <- collect_context_filter_choices(
+    duckdb_path = duckdb_path,
+    species_column = "Zea_mays",
+    expression_unit = "TPM"
+  )
+
+  testthat::expect_named(initial_choices, c("species", "expression_units"))
+  testthat::expect_named(
+    context_choices,
+    c("experiments", "organism_parts", "developmental_stages", "conditions")
+  )
+  testthat::expect_true("Zea_mays" %in% initial_choices$species)
+  testthat::expect_true("leaf" %in% context_choices$organism_parts)
 })

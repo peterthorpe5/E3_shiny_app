@@ -63,3 +63,38 @@ make_test_expression_tbl <- function() {
     source_file = paste0("file", 1:4)
   )
 }
+
+make_test_duckdb <- function() {
+  testthat::skip_if_not_installed("DBI")
+  testthat::skip_if_not_installed("duckdb")
+  testthat::skip_if_not_installed("duckplyr")
+
+  duckdb_path <- tempfile(fileext = ".duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = duckdb_path, read_only = FALSE)
+
+  DBI::dbWriteTable(con, "atlas_expression_long", make_test_expression_tbl())
+  DBI::dbExecute(
+    con,
+    "CREATE VIEW atlas_expression_with_sample_metadata AS
+     SELECT * FROM atlas_expression_long"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE VIEW atlas_sample_metadata_wide_joinable AS
+     SELECT DISTINCT
+       species_column,
+       experiment_accession,
+       sample_or_condition,
+       organism_part,
+       developmental_stage,
+       genotype,
+       cultivar,
+       condition
+     FROM atlas_expression_long
+     WHERE sample_or_condition IS NOT NULL
+       AND sample_or_condition != ''"
+  )
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
+  duckdb_path
+}

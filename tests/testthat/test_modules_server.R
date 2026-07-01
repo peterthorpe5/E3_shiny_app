@@ -1,10 +1,12 @@
 testthat::test_that("expression filter server returns applied filter values", {
   testthat::skip_if_not_installed("shiny")
 
+  duckdb_path <- make_test_duckdb()
+
   shiny::testServer(
     app = expression_filters_server,
     args = list(
-      expr_table = shiny::reactive(make_test_expression_tbl()),
+      duckdb_path = duckdb_path,
       default_expression_unit = "TPM"
     ),
     {
@@ -23,6 +25,53 @@ testthat::test_that("expression filter server returns applied filter values", {
       testthat::expect_equal(filters()$species_column, "Zea_mays")
       testthat::expect_equal(filters()$expression_unit, "TPM")
       testthat::expect_equal(filters()$minimum_expression, 2)
+    }
+  )
+})
+
+testthat::test_that("update_filter_select handles empty and non-empty choices", {
+  testthat::skip_if_not_installed("shiny")
+
+  shiny::testServer(
+    app = function(id) {
+      shiny::moduleServer(id, function(input, output, session) {
+        non_empty <- update_filter_select(
+          session = session,
+          input_id = "dummy",
+          choices = c("b", "a", "a"),
+          include_all = TRUE,
+          selected = "b"
+        )
+        empty <- update_filter_select(
+          session = session,
+          input_id = "dummy",
+          choices = character(),
+          include_all = FALSE
+        )
+        list(non_empty = non_empty, empty = empty)
+      })
+    },
+    {
+      testthat::expect_equal(non_empty, c("All", "a", "b"))
+      testthat::expect_equal(empty, "All")
+    }
+  )
+})
+
+testthat::test_that("safely_collect_choices returns values and converts errors to NULL", {
+  testthat::skip_if_not_installed("shiny")
+
+  shiny::testServer(
+    app = function(id) {
+      shiny::moduleServer(id, function(input, output, session) {
+        ok <- safely_collect_choices(1 + 1, session, "failed")
+        bad <- safely_collect_choices(stop("boom"), session, "failed")
+        list(ok = ok, bad = bad)
+      })
+    },
+    {
+      testthat::expect_equal(ok, 2)
+      testthat::expect_null(bad)
     }
   )
 })
