@@ -1,15 +1,5 @@
-testthat::test_that("expression filters work on in-memory test data", {
-  expr <- tibble::tibble(
-    species_column = c("Zea_mays", "Zea_mays", "Arabidopsis_thaliana"),
-    expression_unit = c("TPM", "FPKM", "TPM"),
-    experiment_accession = c("E1", "E1", "E2"),
-    organism_part = c("leaf", "leaf", "root"),
-    developmental_stage = c("9 day", "9 day", "adult"),
-    condition = c("leaf section 1", "leaf section 1", "control"),
-    gene_id = c("Zm00001", "Zm00001", "AT1G01010"),
-    gene_name = c("", "", "NAC001"),
-    expression_value = c(5, 10, 1)
-  )
+testthat::test_that("expression filters apply species, unit, metadata and expression thresholds", {
+  expr <- make_test_expression_tbl()
 
   filtered <- apply_expression_filters(
     expr_table = expr,
@@ -27,28 +17,71 @@ testthat::test_that("expression filters work on in-memory test data", {
 
   testthat::expect_equal(nrow(filtered), 1L)
   testthat::expect_equal(filtered$expression_unit, "TPM")
+  testthat::expect_equal(filtered$organism_part, "leaf")
 })
 
-testthat::test_that("display collection limits rows", {
-  expr <- tibble::tibble(
-    species_column = rep("Zea_mays", 3),
-    experiment_accession = rep("E1", 3),
-    gene_id = paste0("gene", 1:3),
-    gene_name = rep("", 3),
-    sample_or_condition = rep("g1", 3),
-    organism_part = rep("leaf", 3),
-    developmental_stage = rep("9 day", 3),
-    cultivar = rep("B73", 3),
-    genotype = rep("wild type genotype", 3),
-    condition = rep("leaf section 1", 3),
-    expression_value = c(1, 2, 3),
-    expression_unit = rep("TPM", 3)
+testthat::test_that("expression filters allow All values to pass through", {
+  expr <- make_test_expression_tbl()
+
+  filtered <- apply_expression_filters(
+    expr_table = expr,
+    filters = list(
+      species_column = "All",
+      expression_unit = "All",
+      experiment_accession = "All",
+      organism_part = "All",
+      developmental_stage = "All",
+      condition = "All",
+      minimum_expression = NA_real_,
+      gene_search = ""
+    )
   )
 
+  testthat::expect_equal(nrow(filtered), nrow(expr))
+})
+
+testthat::test_that("gene search matches gene IDs and gene names", {
+  expr <- make_test_expression_tbl()
+
+  by_id <- apply_expression_filters(
+    expr_table = expr,
+    filters = list(gene_search = "Zm00002")
+  )
+
+  by_name <- apply_expression_filters(
+    expr_table = expr,
+    filters = list(gene_search = "NAC")
+  )
+
+  testthat::expect_equal(by_id$gene_id, "Zm00002")
+  testthat::expect_equal(by_name$gene_name, "NAC001")
+})
+
+testthat::test_that("expression selection summary counts rows, genes, experiments and groups", {
+  summary <- summarise_expression_selection(make_test_expression_tbl())
+
+  testthat::expect_equal(summary$rows, 4L)
+  testthat::expect_equal(summary$genes, 3L)
+  testthat::expect_equal(summary$experiments, 3L)
+  testthat::expect_equal(summary$groups, 2L)
+})
+
+testthat::test_that("display collection keeps expected columns and limits rows", {
   display <- collect_expression_display(
-    filtered_table = expr,
+    filtered_table = make_test_expression_tbl(),
     max_rows = 2L
   )
 
   testthat::expect_equal(nrow(display), 2L)
+  testthat::expect_true("species_column" %in% names(display))
+  testthat::expect_true("expression_value" %in% names(display))
+})
+
+testthat::test_that("metadata coverage summary counts non-missing metadata", {
+  coverage <- summarise_metadata_coverage(make_test_expression_tbl())
+
+  testthat::expect_equal(coverage$rows, 4L)
+  testthat::expect_equal(coverage$rows_with_organism_part, 3)
+  testthat::expect_equal(coverage$rows_with_developmental_stage, 3)
+  testthat::expect_equal(coverage$rows_with_condition, 3)
 })

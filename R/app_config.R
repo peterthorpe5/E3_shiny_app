@@ -1,7 +1,12 @@
+# Configuration and command-line parsing helpers. The app is usually launched
+# through inst/scripts/run_app.R, but these helpers are also useful during
+# testing and scripted deployments.
+
 #' Parse simple command-line arguments.
 #'
-#' Parses arguments of the form `--name=value` or `--flag value` into a named
-#' list. Boolean flags without a value are returned as TRUE.
+#' Parses arguments of the form `--name=value`, `--name value`, or bare boolean
+#' flags such as `--verbose`. Positional arguments are rejected to avoid
+#' accidentally treating a mistyped option as a file path.
 #'
 #' @param args Character vector of command-line arguments.
 #' @return Named list of parsed values.
@@ -46,8 +51,9 @@ parse_cli_args <- function(args = commandArgs(trailingOnly = TRUE)) {
 
 #' Get the app configuration.
 #'
-#' Builds a simple app configuration list from defaults, environment variables
-#' and optional command-line arguments.
+#' Builds a simple app configuration list from defaults, environment variables,
+#' and optional command-line arguments. Command-line values take priority over
+#' environment variables, which take priority over hard-coded defaults.
 #'
 #' @param args Character vector of command-line arguments.
 #' @return Named list containing app configuration values.
@@ -72,14 +78,18 @@ get_app_config <- function(args = commandArgs(trailingOnly = TRUE)) {
     max_table_rows = max_table_rows,
     default_expression_unit = parsed_args$default_expression_unit %||%
       Sys.getenv("E3_DEFAULT_EXPRESSION_UNIT", unset = "TPM"),
-    host = parsed_args$host %||% Sys.getenv("E3_SHINY_HOST", unset = "127.0.0.1"),
-    port = as.integer(parsed_args$port %||% Sys.getenv("E3_SHINY_PORT", unset = "0"))
+    host = parsed_args$host %||%
+      Sys.getenv("E3_SHINY_HOST", unset = "127.0.0.1"),
+    port = as.integer(
+      parsed_args$port %||% Sys.getenv("E3_SHINY_PORT", unset = "0")
+    )
   )
 }
 
 #' Null coalescing operator.
 #'
-#' Returns `x` unless it is NULL, otherwise returns `y`.
+#' Returns `x` unless it is NULL, otherwise returns `y`. It is kept local to the
+#' package so the code does not rely on rlang for this small operation.
 #'
 #' @param x Primary value.
 #' @param y Fallback value.

@@ -1,4 +1,9 @@
 # Standalone Shiny app entry point.
+#
+# This app is deliberately thin: all large data access is pushed through
+# duckplyr/DuckDB views, filters are applied lazily, and only bounded result
+# tables are collected for display. Keep it this way as new project modules are
+# added; the app should orchestrate queries rather than perform heavy imports.
 
 library(bslib)
 library(dplyr)
@@ -17,6 +22,8 @@ source("R/module_expression_summary.R")
 source("R/module_expression_table.R")
 source("R/module_gene_lookup.R")
 
+# Configuration can come from command-line arguments, environment variables, or
+# defaults. See README.md for the supported options.
 app_config <- get_app_config(args = commandArgs(trailingOnly = TRUE))
 
 ui <- bslib::page_sidebar(
@@ -49,15 +56,17 @@ ui <- bslib::page_sidebar(
         "from DuckDB-backed views produced by the E3 expression downloader pipeline."
       ),
       shiny::p(
-        "The app is deliberately modular so additional project tables can be ",
-        "added later, including E3 ligases, HOGs, identifier aliases, domains, ",
-        "and structural/ligandability outputs."
+        "The app is modular so additional project tables can be added later, ",
+        "including E3 ligases, HOGs, identifier aliases, domains, and ",
+        "structural/ligandability outputs."
       )
     )
   )
 )
 
 server <- function(input, output, session) {
+  # A reactive table wrapper keeps all modules working from the same lazy source.
+  # The returned object is not collected here.
   expression_table <- shiny::reactive({
     get_expression_with_metadata(duckdb_path = app_config$duckdb_path)
   })
@@ -68,6 +77,8 @@ server <- function(input, output, session) {
     default_expression_unit = app_config$default_expression_unit
   )
 
+  # The filtered table remains lazy. Downstream modules decide how many rows are
+  # safe to collect for display.
   filtered_table <- shiny::reactive({
     apply_expression_filters(
       expr_table = expression_table(),

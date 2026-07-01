@@ -1,4 +1,5 @@
-# Utility helpers for command-line scripts.
+# Utility helpers for command-line scripts. They are separate from the package R
+# files so script path detection can work before the package itself is loaded.
 
 #' Find the path of the currently running Rscript file.
 #'
@@ -23,6 +24,9 @@ get_current_script_path <- function() {
 }
 
 #' Find the repository root from a script inside inst/scripts.
+#'
+#' The repository root is two levels above `inst/scripts`. Keeping this logic in
+#' one helper avoids repeating fragile path code in every command-line script.
 #'
 #' @return Normalised repository root path.
 get_repo_dir_from_script <- function() {

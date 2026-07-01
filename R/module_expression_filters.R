@@ -99,7 +99,9 @@ expression_filters_server <- function(
       )
     }, ignoreInit = TRUE)
 
-    shiny::eventReactive(input$apply_filters, {
+    # Store the eventReactive in a named object so it can be returned to
+    # the main app and tested with shiny::testServer().
+    filters <- shiny::eventReactive(input$apply_filters, {
       list(
         species_column = input$species_column,
         expression_unit = input$expression_unit,
@@ -111,5 +113,7 @@ expression_filters_server <- function(
         minimum_expression = input$minimum_expression
       )
     }, ignoreNULL = FALSE)
+
+    filters
   })
 }
