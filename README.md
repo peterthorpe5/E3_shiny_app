@@ -1,54 +1,93 @@
-# E3 Expression Shiny app
+# E3 Expression Shiny App
 
-This repository contains a standalone Shiny application for exploring the
-Expression Atlas-derived expression layer produced by the E3 expression
-downloader pipeline.
+A standalone Shiny application for exploring Expression Atlas-derived expression
+and sample metadata produced by the E3 expression downloader pipeline.
 
-The app is intentionally separate from the downloader.  It reads a prepared
-DuckDB file whose views point to Parquet expression and metadata datasets.
+The app is deliberately separate from the downloader repository. It expects a
+prepared DuckDB file whose views point to the Parquet expression and metadata
+folders.
 
-## Expected data input
+## What the app currently does
 
-The app expects a DuckDB file with views such as:
+The app can:
 
-- `atlas_expression_long`
-- `atlas_expression_tpm`
-- `atlas_expression_fpkm`
-- `atlas_sample_metadata_long`
-- `atlas_sample_metadata_wide`
-- `atlas_sample_metadata_wide_joinable`
-- `atlas_expression_with_sample_metadata`
+- filter expression records by species, expression unit, experiment, organism
+  part, developmental stage, condition, gene ID/name and minimum expression;
+- show summary counts for the current selection;
+- show metadata coverage for the current selection;
+- display a row-limited expression table;
+- search for gene IDs or gene names across the selected expression unit;
+- plot selected gene expression as:
+  - a mean expression profile,
+  - a distribution plot,
+  - or a gene-by-group heatmap.
 
-For example:
+The app applies filters in DuckDB before collecting data into R. This is essential
+because the full Expression Atlas-derived table can contain hundreds of millions
+of rows.
 
-```bash
-/Users/PThorpe001/Downloads/expression_atlas_app_test/e3_expression.duckdb
+## Important data layout note
+
+The DuckDB file is a lightweight query layer over Parquet files. It is not the
+full data store. If the data folder is copied to a new location, rebuild the
+DuckDB views so they point to the local Parquet paths.
+
+The expected data folder contains:
+
+```text
+expression_atlas_app_test/
+  e3_expression.duckdb
+  parquet/
+    atlas_expression_long/
+    atlas_sample_metadata_long/
+    atlas_sample_metadata_wide/
+  manifests/
 ```
 
-If the data folder has been copied from the cluster, rebuild the DuckDB views on
-that machine before running the app.  The Parquet files are the real portable
-data; the DuckDB file is a lightweight query layer over those files.
+## Dependencies
 
-## Install
+Use the same conda environment as the expression downloader if possible:
 
 ```bash
 conda activate expression_downloaderR
-R CMD INSTALL .
 ```
 
-## Test
+The app requires these R packages:
+
+```text
+bslib
+dplyr
+DT
+duckplyr
+ggplot2
+plotly
+rlang
+shiny
+shinycssloaders
+stringr
+testthat
+tibble
+```
+
+Optional but recommended for tests:
+
+```text
+DBI
+duckdb
+```
+
+## Install and test
 
 ```bash
+cd /path/to/E3_shiny_app
+
+R CMD INSTALL .
+
 Rscript inst/scripts/check_dependencies.R
 Rscript inst/scripts/run_tests.R
 ```
 
-The test suite covers the utility helpers, command-line parsing, SQL builders,
-DuckDB reader wrappers, query/filter helpers, Shiny UI modules, Shiny server
-modules, and script path helpers.  Tests that need optional packages such as
-`DBI` and `duckdb` are skipped if those packages are not available.
-
-## Run
+## Run the app
 
 ```bash
 Rscript inst/scripts/run_app.R \
@@ -63,44 +102,34 @@ Then open:
 http://127.0.0.1:3838
 ```
 
-## Notes on performance
+## Visualisation tab
 
-The app is designed to filter lazily through DuckDB/duckplyr and only collect
-small, bounded tables for display.  Filter choices are read from lightweight
-views where possible:
+The visualisation tab requires a gene ID or gene-name search. This is deliberate:
+plotting without a gene query would collect too many rows.
 
-- species, expression units and experiments from `atlas_expression_long`
-- tissue/stage/condition choices from `atlas_sample_metadata_wide_joinable`
+Suggested first test:
 
-This avoids populating controls from the very large joined expression-metadata
-view during app start-up.
+```text
+Species: Zea_mays
+Expression unit: TPM
+Gene ID / gene name contains: Zm00001eb
+Group expression by: Organism part or Expression group / sample
+Plot type: Mean profile
+```
 
-## Version notes
+The plot data table below the plot shows exactly which rows were collected for
+visualisation.
 
-### v0.1.5
+## Development rules
 
-- Optimised filter loading so the app does not derive species choices from the
-  huge joined expression-metadata table.
-- Added direct DuckDB filter-choice helpers.
-- Added broader tests for all newly added helpers.
-- Added more Roxygen-style comments and script comments.
+- Keep the app modular.
+- Keep data access in `R/data_sources.R` and SQL construction in
+  `R/query_helpers.R`.
+- Never collect the full expression table into R.
+- Add tests for every new helper function.
+- Prefer direct DuckDB SQL for small app outputs that need to be collected.
+- Use clear Roxygen-style comments above functions.
 
-### v0.1.3
+## Current version
 
-- Expanded tests and comments.
-
-### v0.1.2
-
-- Fixed test helper paths.
-
-### v0.1.1
-
-- Fixed Rscript path detection.
-
-
-## v0.1.5 notes
-
-This version moves the summary, display-table and gene-lookup modules to direct
-DuckDB SQL queries. This avoids Shiny value boxes showing opaque `[object Object]`
-errors when a lazy joined view cannot be summarised through dplyr/duckplyr. It
-also adds broader tests around SQL generation and module server behaviour.
+`0.2.0` adds the first expression visualisation module and expanded tests.

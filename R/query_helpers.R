@@ -424,3 +424,62 @@ summarise_metadata_coverage <- function(filtered_table) {
     ) |>
     dplyr::collect()
 }
+
+#' Build a bounded expression-plot SQL query.
+#'
+#' Selects the columns needed by the visualisation module from the
+#' metadata-aware expression view. The caller must provide a gene search term;
+#' this prevents the app from collecting broad expression tables for plotting.
+#'
+#' @param filters Named list of sidebar filter values. A `gene_search` entry is
+#'   expected and is treated as active when it is not empty or `All`.
+#' @param max_rows Maximum number of rows to collect.
+#' @param alias Attached DuckDB alias.
+#' @return SQL query string.
+build_expression_plot_query <- function(
+  filters = list(),
+  max_rows = 5000L,
+  alias = "expr_app"
+) {
+  if (is_inactive_filter_value(filters$gene_search)) {
+    stop("A gene ID or gene-name search is required for plotting.", call. = FALSE)
+  }
+
+  safe_alias <- sanitise_duckdb_alias(alias = alias)
+  where_clause <- build_expression_where_clause(filters = filters)
+
+  paste(
+    "SELECT",
+    "species_column, experiment_accession, gene_id, gene_name,",
+    "sample_or_condition, organism_part, developmental_stage, cultivar,",
+    "genotype, condition, expression_value, expression_unit",
+    "FROM", paste0(safe_alias, ".main.atlas_expression_with_sample_metadata"),
+    where_clause,
+    "LIMIT", as.integer(max_rows)
+  )
+}
+
+#' Collect bounded expression rows for plotting.
+#'
+#' Executes `build_expression_plot_query()` and collects a small table suitable
+#' for visualisation. This helper is intentionally separate from the expression
+#' table display helper so plot-specific limits and validation can evolve
+#' independently.
+#'
+#' @param duckdb_path Path to the DuckDB database.
+#' @param filters Named list of sidebar and plot filter values.
+#' @param max_rows Maximum number of rows to collect.
+#' @return Collected tibble of expression rows for plotting.
+collect_expression_plot_data <- function(
+  duckdb_path,
+  filters = list(),
+  max_rows = 5000L
+) {
+  collect_duckdb_query(
+    duckdb_path = duckdb_path,
+    query = build_expression_plot_query(
+      filters = filters,
+      max_rows = max_rows
+    )
+  )
+}

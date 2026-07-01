@@ -35,6 +35,7 @@ source(file.path(repo_dir, "R", "module_expression_filters.R"))
 source(file.path(repo_dir, "R", "module_expression_summary.R"))
 source(file.path(repo_dir, "R", "module_expression_table.R"))
 source(file.path(repo_dir, "R", "module_gene_lookup.R"))
+source(file.path(repo_dir, "R", "module_expression_plots.R"))
 
 make_test_expression_tbl <- function() {
   tibble::tibble(

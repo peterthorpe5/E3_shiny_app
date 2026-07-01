@@ -21,6 +21,7 @@ source("R/module_expression_filters.R")
 source("R/module_expression_summary.R")
 source("R/module_expression_table.R")
 source("R/module_gene_lookup.R")
+source("R/module_expression_plots.R")
 
 # Configuration can come from command-line arguments, environment variables, or
 # defaults. See README.md for the supported options.
@@ -47,6 +48,10 @@ ui <- bslib::page_sidebar(
     bslib::nav_panel(
       "Gene lookup",
       gene_lookup_ui("gene_lookup")
+    ),
+    bslib::nav_panel(
+      "Visualise expression",
+      expression_plot_ui("expression_plot")
     ),
     bslib::nav_panel(
       "About",
@@ -90,6 +95,13 @@ server <- function(input, output, session) {
     id = "gene_lookup",
     duckdb_path = app_config$duckdb_path,
     max_rows = app_config$max_table_rows
+  )
+
+  expression_plot_server(
+    id = "expression_plot",
+    duckdb_path = app_config$duckdb_path,
+    filters = filters,
+    default_max_rows = min(app_config$max_table_rows, 5000L)
   )
 }
 

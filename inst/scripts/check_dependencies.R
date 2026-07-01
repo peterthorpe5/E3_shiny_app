@@ -10,6 +10,8 @@ required_packages <- c(
   "dplyr",
   "DT",
   "duckplyr",
+  "ggplot2",
+  "plotly",
   "rlang",
   "shiny",
   "shinycssloaders",
