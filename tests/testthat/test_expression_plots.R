@@ -70,7 +70,7 @@ testthat::test_that("plot query requires a gene search and includes a limit", {
   )
 
   testthat::expect_match(query, "atlas_expression_with_sample_metadata")
-  testthat::expect_match(query, "contains\\(lower")
+  testthat::expect_match(query, "instr\\(lower")
   testthat::expect_false(grepl("ESCAPE", query, fixed = TRUE))
   testthat::expect_match(query, "LIMIT 123")
 })
@@ -117,7 +117,7 @@ testthat::test_that("expression plot UI creates expected controls", {
   ui <- expression_plot_ui("plot")
   ui_text <- paste(as.character(ui), collapse = "\n")
 
-  testthat::expect_match(ui_text, "Gene ID or gene name contains")
+  testthat::expect_match(ui_text, "Gene ID or gene name instr")
   testthat::expect_match(ui_text, "Plot selected expression")
   testthat::expect_match(ui_text, "plot_data_table")
 })

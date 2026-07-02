@@ -1,13 +1,13 @@
-testthat::test_that("gene contains SQL handles quotes and wildcards literally", {
-  condition <- build_gene_contains_condition("AT1G_%O'Brien")
+testthat::test_that("gene literal gene-search SQL handles quotes and wildcards literally", {
+  condition <- build_gene_instr_condition("AT1G_%O'Brien")
 
-  testthat::expect_match(condition, "contains\\(lower")
+  testthat::expect_match(condition, "instr\\(lower")
   testthat::expect_match(condition, "AT1G", ignore.case = TRUE)
   testthat::expect_match(condition, "o''brien")
   testthat::expect_false(grepl("ESCAPE", condition, fixed = TRUE))
 })
 
-testthat::test_that("direct DuckDB gene contains search works without ESCAPE", {
+testthat::test_that("direct DuckDB gene instr search works without ESCAPE", {
   duckdb_path <- make_test_duckdb()
 
   display <- collect_expression_display_sql(

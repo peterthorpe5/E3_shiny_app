@@ -37,7 +37,7 @@ is_inactive_filter_value <- function(value) {
 #'
 #' Escapes SQL LIKE wildcards. This helper is retained for ad hoc use and
 #' backwards-compatible tests, but production gene searches now use DuckDB's
-#' `contains()` function rather than `LIKE ... ESCAPE`. That avoids an escaping
+#' `instr()` function rather than `LIKE ... ESCAPE`. That avoids an escaping
 #' incompatibility seen on some DuckDB builds.
 #'
 #' @param value Search value supplied by the user.
@@ -50,12 +50,13 @@ escape_sql_like <- function(value) {
   escaped
 }
 
-#' Build a case-insensitive gene search SQL condition.
+#' Build a case-insensitive literal gene-search SQL condition.
 #'
 #' DuckDB rejected the previous `LIKE ... ESCAPE '\\'` form on some
 #' installations because the escape string was interpreted as more than one
-#' character. This helper uses `contains(lower(coalesce(...)))` instead, which
-#' treats user input as a literal substring and avoids SQL wildcard escaping.
+#' character. A subsequent `contains()` implementation was also inconsistent
+#' across DuckDB/R builds. This helper therefore uses `instr()` on lower-case
+#' strings, which performs literal substring matching without SQL wildcards.
 #'
 #' @param search_value User-supplied gene ID or gene-name fragment.
 #' @return SQL condition searching both `gene_id` and `gene_name`.
@@ -65,11 +66,11 @@ build_gene_contains_condition <- function(search_value) {
 
   paste0(
     "(",
-    "contains(lower(coalesce(CAST(gene_id AS VARCHAR), '')), '",
+    "instr(lower(coalesce(CAST(gene_id AS VARCHAR), '')), '",
     safe_value,
-    "') OR contains(lower(coalesce(CAST(gene_name AS VARCHAR), '')), '",
+    "') > 0 OR instr(lower(coalesce(CAST(gene_name AS VARCHAR), '')), '",
     safe_value,
-    "')",
+    "') > 0",
     ")"
   )
 }
