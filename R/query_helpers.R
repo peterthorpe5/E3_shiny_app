@@ -60,7 +60,7 @@ escape_sql_like <- function(value) {
 #'
 #' @param search_value User-supplied gene ID or gene-name fragment.
 #' @return SQL condition searching both `gene_id` and `gene_name`.
-build_gene_contains_condition <- function(search_value) {
+build_gene_instr_condition <- function(search_value) {
   clean_value <- tolower(trimws(as.character(search_value[[1L]])))
   safe_value <- escape_sql_literal(clean_value)
 
@@ -73,6 +73,17 @@ build_gene_contains_condition <- function(search_value) {
     "') > 0",
     ")"
   )
+}
+
+#' Backwards-compatible gene-search condition helper.
+#'
+#' Older tests and downstream code may still call this name from the previous
+#' implementation. It now delegates to `build_gene_instr_condition()`.
+#'
+#' @param search_value User-supplied gene ID or gene-name fragment.
+#' @return SQL condition searching both `gene_id` and `gene_name`.
+build_gene_contains_condition <- function(search_value) {
+  build_gene_instr_condition(search_value = search_value)
 }
 
 #' Build SQL conditions from app filters.
@@ -128,7 +139,7 @@ build_expression_filter_conditions <- function(filters = list()) {
   if (!is_inactive_filter_value(gene_search)) {
     conditions <- c(
       conditions,
-      build_gene_contains_condition(search_value = gene_search[[1L]])
+      build_gene_instr_condition(search_value = gene_search[[1L]])
     )
   }
 
@@ -246,7 +257,7 @@ build_gene_lookup_query <- function(
 ) {
   safe_alias <- sanitise_duckdb_alias(alias = alias)
   unit_value <- escape_sql_literal(expression_unit)
-  gene_condition <- build_gene_contains_condition(search_value = gene_query)
+  gene_condition <- build_gene_instr_condition(search_value = gene_query)
 
   paste(
     "SELECT",
@@ -254,7 +265,7 @@ build_gene_lookup_query <- function(
     "sample_or_condition, organism_part, developmental_stage, condition,",
     "expression_value, expression_unit",
     "FROM", paste0(safe_alias, ".main.atlas_expression_with_sample_metadata"),
-    "WHERE expression_unit = '", unit_value, "'",
+    paste0("WHERE expression_unit = '", unit_value, "'"),
     "AND", gene_condition,
     "LIMIT", as.integer(max_rows)
   )

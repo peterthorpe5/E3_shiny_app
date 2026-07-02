@@ -112,7 +112,7 @@ testthat::test_that("expression SQL WHERE clauses include active filters only", 
   testthat::expect_match(where_clause, '"expression_unit" = \'TPM\'')
   testthat::expect_match(where_clause, '"organism_part" = \'leaf\'')
   testthat::expect_match(where_clause, "expression_value >= 2")
-  testthat::expect_match(where_clause, "contains\\(lower")
+  testthat::expect_match(where_clause, "instr\\(lower")
   testthat::expect_false(grepl("ESCAPE", where_clause, fixed = TRUE))
   testthat::expect_false(grepl("experiment_accession", where_clause))
 })
@@ -155,7 +155,7 @@ testthat::test_that("direct DuckDB summary helpers return expected values", {
   testthat::expect_equal(nrow(display), 2L)
 })
 
-testthat::test_that("gene lookup SQL is bounded and uses literal contains search", {
+testthat::test_that("gene lookup SQL is bounded and uses literal instr search", {
   query <- build_gene_lookup_query(
     gene_query = "AT1G_%",
     expression_unit = "TPM",
@@ -163,7 +163,9 @@ testthat::test_that("gene lookup SQL is bounded and uses literal contains search
   )
 
   testthat::expect_match(query, "LIMIT 50")
-  testthat::expect_match(query, "contains\\(lower")
+  testthat::expect_match(query, "instr\\(lower")
   testthat::expect_false(grepl("ESCAPE", query, fixed = TRUE))
   testthat::expect_match(query, "expression_unit = '")
+  testthat::expect_false(grepl("' TPM '", query, fixed = TRUE))
+  testthat::expect_match(query, "expression_unit = 'TPM'")
 })

@@ -135,8 +135,13 @@ visualisation.
 `0.2.1` fixes DuckDB gene-search escaping in the expression table, gene lookup, and visualisation queries. Gene searches now use literal case-insensitive `contains()` SQL rather than `LIKE ... ESCAPE`, which failed on some DuckDB builds. Tests have been expanded to cover this route.
 
 
-## v0.2.2
+## v0.2.3
 
 - Replaced DuckDB `contains()` gene-search SQL with `instr()` literal substring matching.
 - This avoids both `LIKE ... ESCAPE` issues and inconsistent `contains()` behaviour across DuckDB/R builds.
 - Added/updated tests so the plotting and gene lookup SQL are exercised through a temporary DuckDB database.
+
+
+## v0.2.3 notes
+
+This patch fixes the gene-search SQL helper used by the plotting and lookup modules. It uses DuckDB `instr(lower(...), ...) > 0` for literal substring matching and fixes a string-construction bug that could add spaces inside the expression-unit filter.
