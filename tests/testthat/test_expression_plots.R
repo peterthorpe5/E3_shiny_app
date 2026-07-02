@@ -117,7 +117,7 @@ testthat::test_that("expression plot UI creates expected controls", {
   ui <- expression_plot_ui("plot")
   ui_text <- paste(as.character(ui), collapse = "\n")
 
-  testthat::expect_match(ui_text, "Gene ID or gene name instr")
+  testthat::expect_match(ui_text, "Gene ID or gene name contains")
   testthat::expect_match(ui_text, "Plot selected expression")
   testthat::expect_match(ui_text, "plot_data_table")
 })
